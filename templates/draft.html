@@ -1,0 +1,528 @@
+{% extends "layout.html" %}
+
+{% block title %}토너먼트 드래프트 - LoL 챔피언 드래프트{% endblock %}
+
+{% block extra_css %}
+<style>
+  .draft-container {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  
+  .team-panel {
+    width: 45%;
+    padding: 15px;
+    border-radius: 5px;
+  }
+  
+  .blue-team {
+    background-color: rgba(0, 0, 255, 0.2);
+    border: 2px solid #0000ff;
+  }
+  
+  .red-team {
+    background-color: rgba(255, 0, 0, 0.2);
+    border: 2px solid #ff0000;
+  }
+  
+  .pick-section, .ban-section {
+    margin: 15px 0;
+  }
+  
+  .champion-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .champion-item {
+    width: 60px;
+    height: 80px;
+    border: 1px solid #444;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 10px;
+    background: #333;
+    padding: 5px;
+    border-radius: 3px;
+  }
+  
+  .champion-item img {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 5px;
+  }
+  
+  .active-team {
+    box-shadow: 0 0 10px gold;
+  }
+  
+  .timer {
+    font-size: 2em;
+    text-align: center;
+    margin: 10px;
+    color: #f00;
+  }
+  
+  .banned {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  
+  .pick-order {
+    display: flex;
+    justify-content: center;
+    margin: 15px 0;
+    gap: 5px;
+  }
+  
+  .pick-order-item {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+  }
+  
+  .pick-order-blue {
+    background-color: rgba(0, 0, 255, 0.5);
+    border: 1px solid #0000ff;
+  }
+  
+  .pick-order-red {
+    background-color: rgba(255, 0, 0, 0.5);
+    border: 1px solid #ff0000;
+  }
+  
+  .pick-order-active {
+    box-shadow: 0 0 10px gold;
+    transform: scale(1.2);
+  }
+  
+  .search-container {
+    margin-bottom: 10px;
+  }
+  
+  .search-input {
+    padding: 8px;
+    width: 200px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+  }
+  
+  .ban-list {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+  
+  .ban-list h3 {
+    margin-top: 0;
+  }
+  
+  .previous-picks {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+  
+  .previous-picks h3 {
+    margin-top: 0;
+  }
+  
+  .room-info {
+    background-color: #222;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+  }
+  
+  .your-team {
+    font-weight: bold;
+    color: gold;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<audio id="bgm" loop>
+  <source src="{{ url_for('static', filename='bgm/draft-bgm.mp3') }}" type="audio/mpeg">
+</audio>
+
+<div class="room-info">
+  <h2>{{ room.name }}</h2>
+  <p>당신의 팀: <span class="your-team">{% if team == 'blue' %}블루팀{% elif team == 'red' %}레드팀{% else %}관전자{% endif %}</span></p>
+  <p>첫 픽 팀: <span class="your-team">{% if room.state.first_pick_team == 'blue' %}블루팀{% else %}레드팀{% endif %}</span></p>
+</div>
+
+<div class="timer" id="timer">00:30</div>
+
+<div class="phase-indicator">
+  현재 팀: <span id="current-team">
+    {% if room.state.current_team == 'blue' %}블루팀
+    {% else %}레드팀
+    {% endif %}
+  </span>
+</div>
+
+<div class="pick-order">
+  {% for team in pick_order %}
+  <div class="pick-order-item pick-order-{{ team }} {% if loop.index0 == room.state.pick_phase %}pick-order-active{% endif %}">
+    {{ loop.index }}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- 밴 리스트 추가 -->
+<div class="ban-list">
+  <h3>밴 목록</h3>
+  <div class="champion-list" id="ban-list">
+    {% for ban in room.state.random_bans %}
+    <div class="champion-item">
+      <img src="{{ url_for('static', filename='images/' + ban.image) }}" alt="{{ ban.name }}">
+      <p>{{ ban.name }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- 전판 사용 챔피언 목록 -->
+<div class="previous-picks">
+  <h3>전판 사용 챔피언 ({{ previous_picks|length }}개)</h3>
+  <div class="champion-list" id="previous-picks-list">
+    {% for pick in previous_picks %}
+    <div class="champion-item">
+      <img src="{{ url_for('static', filename='images/' + champion_image_map[pick]) }}" alt="{{ pick }}" onerror="this.onerror=null; this.src='{{ url_for('static', filename='images/default.png') }}';">
+      <p>{{ pick }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="draft-container">
+  <div class="team-panel blue-team" id="blue-team">
+    <h3>블루팀</h3>
+    
+    <div class="pick-section">
+      <h4>픽 ({{ room.state.blue_picks|length }}/5)</h4>
+      <div class="champion-list" id="blue-picks">
+        {% for pick in room.state.blue_picks %}
+        <div class="champion-item">
+          <img src="{{ url_for('static', filename='images/' + champion_image_map[pick]) }}" alt="{{ pick }}">
+          <p>{{ pick }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  
+  <div class="team-panel red-team" id="red-team">
+    <h3>레드팀</h3>
+    
+    <div class="pick-section">
+      <h4>픽 ({{ room.state.red_picks|length }}/5)</h4>
+      <div class="champion-list" id="red-picks">
+        {% for pick in room.state.red_picks %}
+        <div class="champion-item">
+          <img src="{{ url_for('static', filename='images/' + champion_image_map[pick]) }}" alt="{{ pick }}">
+          <p>{{ pick }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="finish-game-btn">게임 종료</button>
+  <button id="reset-btn">모두 초기화</button>
+</div>
+
+<div class="search-container">
+  <input type="text" id="champ-search" class="search-input" placeholder="챔피언 이름 검색...">
+</div>
+
+<div class="champion-grid" id="champion-grid">
+  {% for champ in champions %}
+  <div class="champion" data-name="{{ champ.name }}">
+    <img src="{{ url_for('static', filename='images/' + champ.image) }}" alt="{{ champ.name }}">
+    <p>{{ champ.name }}</p>
+    <button class="pick-btn" onclick="pickChampion('{{ champ.name }}')">픽</button>
+  </div>
+  {% endfor %}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+// Socket.IO 연결
+const socket = io();
+const roomId = "{{ room_id }}";
+const myTeam = "{{ team }}";
+const pickOrder = {{ pick_order|tojson }};
+const championImageMap = {{ champion_image_map|tojson }};
+let timerInterval;
+
+// 연결이 끊어졌을 때 저장
+socket.on('disconnect', function() {
+  localStorage.setItem('lastRoom', roomId);
+  localStorage.setItem('lastTeam', myTeam);
+});
+
+// 재연결 시 방에 다시 입장
+socket.on('connect', function() {
+  const lastRoom = localStorage.getItem('lastRoom');
+  const lastTeam = localStorage.getItem('lastTeam');
+  if (lastRoom) {
+    socket.emit('join', {
+      room: lastRoom,
+      team: lastTeam
+    });
+  }
+});
+
+// 방 입장
+socket.emit('join', {
+  room: roomId,
+  team: myTeam
+});
+
+// 브금 자동 재생
+document.addEventListener('click', () => {
+  const bgm = document.getElementById('bgm');
+  if(bgm.paused) bgm.play();
+}, {once:true});
+
+// 챔피언 픽
+function pickChampion(name) {
+  const currentTeam = document.getElementById('current-team').textContent.includes('블루팀') ? 'blue' : 'red';
+  
+  if (myTeam !== currentTeam || myTeam === 'spectator') {
+    alert('당신의 턴이 아닙니다.');
+    return;
+  }
+  
+  socket.emit('pick_champion', {
+    room: roomId,
+    team: myTeam,
+    champion: name
+  });
+}
+
+// 타이머 시작
+function startTimer(duration) {
+  let seconds = duration;
+  const timer = document.getElementById('timer');
+  timer.textContent = `00:${seconds.toString().padStart(2, '0')}`;
+  
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    seconds--;
+    timer.textContent = `00:${seconds.toString().padStart(2, '0')}`;
+    
+    if (seconds <= 0) {
+      clearInterval(timerInterval);
+      timer.textContent = "시간초과!";
+    }
+  }, 1000);
+}
+
+// 타이머 재시작
+socket.on('restart_timer', function(data) {
+  startTimer(data.duration);
+});
+
+// 드래프트 업데이트
+socket.on('update_draft', function(data) {
+  // 블루팀 픽 업데이트
+  const bluePicksList = document.getElementById('blue-picks');
+  bluePicksList.innerHTML = '';
+  
+  data.blue_picks.forEach(pick => {
+    const champItem = document.createElement('div');
+    champItem.className = 'champion-item';
+    
+    const img = document.createElement('img');
+    img.src = `/static/images/${championImageMap[pick]}`;
+    img.alt = pick;
+    img.onerror = function() {
+      this.onerror = null;
+      this.src = '/static/images/default.png';
+    };
+    
+    const p = document.createElement('p');
+    p.textContent = pick;
+    
+    champItem.appendChild(img);
+    champItem.appendChild(p);
+    bluePicksList.appendChild(champItem);
+  });
+  
+  // 레드팀 픽 업데이트
+  const redPicksList = document.getElementById('red-picks');
+  redPicksList.innerHTML = '';
+  
+  data.red_picks.forEach(pick => {
+    const champItem = document.createElement('div');
+    champItem.className = 'champion-item';
+    
+    const img = document.createElement('img');
+    img.src = `/static/images/${championImageMap[pick]}`;
+    img.alt = pick;
+    img.onerror = function() {
+      this.onerror = null;
+      this.src = '/static/images/default.png';
+    };
+    
+    const p = document.createElement('p');
+    p.textContent = pick;
+    
+    champItem.appendChild(img);
+    champItem.appendChild(p);
+    redPicksList.appendChild(champItem);
+  });
+  
+  // 밴 리스트 업데이트
+  if (data.random_bans) {
+    const banList = document.getElementById('ban-list');
+    banList.innerHTML = '';
+    
+    data.random_bans.forEach(ban => {
+      const champItem = document.createElement('div');
+      champItem.className = 'champion-item';
+      
+      const img = document.createElement('img');
+      img.src = `/static/images/${championImageMap[ban]}`;
+      img.alt = ban;
+      img.onerror = function() {
+        this.onerror = null;
+        this.src = '/static/images/default.png';
+      };
+      
+      const p = document.createElement('p');
+      p.textContent = ban;
+      
+      champItem.appendChild(img);
+      champItem.appendChild(p);
+      banList.appendChild(champItem);
+    });
+  }
+  
+  // 픽 카운터 업데이트
+  document.querySelector('#blue-team .pick-section h4').textContent = `픽 (${data.blue_picks.length}/5)`;
+  document.querySelector('#red-team .pick-section h4').textContent = `픽 (${data.red_picks.length}/5)`;
+  
+  // 현재 팀 업데이트
+  document.getElementById('current-team').textContent = data.current_team === 'blue' ? '블루팀' : '레드팀';
+  
+  // 픽 순서 표시 업데이트
+  document.querySelectorAll('.pick-order-item').forEach((item, index) => {
+    item.classList.toggle('pick-order-active', index === data.pick_phase);
+  });
+  
+  // 현재 팀 강조
+  document.getElementById('blue-team').classList.toggle('active-team', data.current_team === 'blue');
+  document.getElementById('red-team').classList.toggle('active-team', data.current_team === 'red');
+  
+  updateChampionAvailability(data);
+});
+
+// 이미 선택된 챔피언 비활성화
+function updateChampionAvailability(data) {
+  const bluePicks = data ? data.blue_picks : [];
+  const redPicks = data ? data.red_picks : [];
+  const randomBans = data ? data.random_bans : [];
+  const previousPicks = {{ previous_picks|tojson }};
+  
+  const allSelectedChampions = [
+    ...bluePicks,
+    ...redPicks,
+    ...randomBans,
+    ...previousPicks
+  ];
+  
+  document.querySelectorAll('#champion-grid .champion').forEach(card => {
+    const champName = card.dataset.name;
+    if (allSelectedChampions.includes(champName)) {
+      card.classList.add('banned');
+    } else {
+      card.classList.remove('banned');
+    }
+  });
+  
+  // 현재 팀이 아니거나 관전자인 경우 픽 버튼 비활성화
+  const currentTeam = document.getElementById('current-team').textContent.includes('블루팀') ? 'blue' : 'red';
+  
+  document.querySelectorAll('.pick-btn').forEach(btn => {
+    if (myTeam !== currentTeam || myTeam === 'spectator') {
+      btn.disabled = true;
+    } else {
+      if (!btn.parentElement.classList.contains('banned')) {
+        btn.disabled = false;
+      } else {
+        btn.disabled = true;
+      }
+    }
+  });
+}
+
+// 상태 메시지 수신
+socket.on('status', function(data) {
+  console.log(data.msg);
+});
+
+// 오류 메시지 수신
+socket.on('error', function(data) {
+  alert(data.msg);
+});
+
+// 게임 종료
+document.getElementById('finish-game-btn').addEventListener('click', function() {
+  if (confirm('게임을 종료하고 전판 픽을 저장하시겠습니까?')) {
+    socket.emit('finish_game', {
+      room: roomId
+    });
+  }
+});
+
+// 게임 종료 응답 수신
+socket.on('game_finished', function(data) {
+  alert('게임이 종료되었습니다. 전판 픽이 저장되었습니다.');
+  location.reload();
+});
+
+// 모두 초기화
+document.getElementById('reset-btn').addEventListener('click', function() {
+  if (confirm('모든 데이터를 초기화하시겠습니까? 전판 픽 기록도 모두 삭제됩니다.')) {
+    socket.emit('reset_game', {
+      room: roomId
+    });
+  }
+});
+
+// 게임 초기화 응답 수신
+socket.on('game_reset', function(data) {
+  alert('모든 데이터가 초기화되었습니다.');
+  location.reload();
+});
+
+// 챔피언 검색
+document.getElementById('champ-search').addEventListener('input', function() {
+  const query = this.value.trim().toLowerCase();
+  document.querySelectorAll('#champion-grid .champion').forEach(card => {
+    const name = card.dataset.name.toLowerCase();
+    card.style.display = name.includes(query) ? '' : 'none';
+  });
+});
+
+// 초기화
+startTimer(30);
+updateChampionAvailability();
+</script>
+{% endblock %}

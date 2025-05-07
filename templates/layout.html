@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}LoL 챔피언 드래프트{% endblock %}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #0a0a0c;
+      color: #e1e1e1;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      width: 90%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    header {
+      background-color: #111;
+      padding: 15px 0;
+      margin-bottom: 30px;
+      border-bottom: 1px solid #333;
+    }
+    
+    header h1 {
+      margin: 0;
+      text-align: center;
+    }
+    
+    header a {
+      color: #e1e1e1;
+      text-decoration: none;
+    }
+    
+    button {
+      background-color: #0a323c;
+      color: #e1e1e1;
+      border: 1px solid #0f6e9c;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #0f6e9c;
+    }
+    
+    button:disabled {
+      background-color: #333;
+      border-color: #555;
+      cursor: not-allowed;
+    }
+    
+    input, select {
+      background-color: #222;
+      color: #e1e1e1;
+      border: 1px solid #444;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    
+    .champion-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    
+    .champion {
+      width: 80px;
+      background-color: #222;
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+      transition: transform 0.2s;
+    }
+    
+    .champion:hover {
+      transform: translateY(-5px);
+    }
+    
+    .champion img {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+    }
+    
+    .champion p {
+      margin: 5px 0;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .champion.banned {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1><a href="/">LoL 챔피언 드래프트</a></h1>
+    </div>
+  </header>
+  
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

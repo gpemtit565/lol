@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div style="text-align: center; margin-top: 50px;">
+  <h2>LoL 챔피언 드래프트</h2>
+  <p>소환사의 협곡 토너먼트 드래프트 또는 칼바람 나락 랜덤픽을 선택하세요</p>
+  
+  <div style="margin-top: 30px; display: flex; justify-content: center; gap: 20px;">
+    <a href="/rooms"><button style="padding: 15px 30px; font-size: 18px;">토너먼트 드래프트</button></a>
+    <a href="/aram_rooms"><button style="padding: 15px 30px; font-size: 18px;">칼바람 랜덤픽</button></a>
+  </div>
+</div>
+{% endblock %}

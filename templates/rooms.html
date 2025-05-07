@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+
+{% block title %}방 목록 - LoL 챔피언 드래프트{% endblock %}
+
+{% block extra_css %}
+<style>
+  .room-list {
+    margin-top: 30px;
+  }
+  
+  .room-item {
+    background-color: #222;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .room-name {
+    font-size: 18px;
+    font-weight: bold;
+  }
+  
+  .room-actions {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .create-form {
+    background-color: #222;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 30px;
+  }
+  
+  .create-form h3 {
+    margin-top: 0;
+  }
+  
+  .form-group {
+    margin-bottom: 15px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 5px;
+  }
+  
+  .form-group input {
+    width: 100%;
+  }
+  
+  .submit-btn {
+    margin-top: 10px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>토너먼트 드래프트 방</h2>
+
+<div class="create-form">
+  <h3>새 방 만들기</h3>
+  <form action="/create_room" method="post">
+    <div class="form-group">
+      <label for="room_name">방 이름</label>
+      <input type="text" id="room_name" name="room_name" required>
+    </div>
+    <button type="submit" class="submit-btn">방 만들기</button>
+  </form>
+</div>
+
+<div class="room-list">
+  <h3>방 목록</h3>
+  {% if rooms %}
+    {% for room_id, room in rooms.items() %}
+      <div class="room-item">
+        <div class="room-name">{{ room.name }}</div>
+        <div class="room-actions">
+          {% if not room.blue_team %}
+            <a href="/draft/{{ room_id }}?team=blue"><button>블루팀 참가</button></a>
+          {% else %}
+            <button disabled>블루팀 참가</button>
+          {% endif %}
+          
+          {% if not room.red_team %}
+            <a href="/draft/{{ room_id }}?team=red"><button>레드팀 참가</button></a>
+          {% else %}
+            <button disabled>레드팀 참가</button>
+          {% endif %}
+          
+          <a href="/draft/{{ room_id }}"><button>관전하기</button></a>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p>현재 생성된 방이 없습니다.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,152 @@
+{% extends "layout.html" %}
+
+{% block title %}칼바람 팀 설정 - LoL 챔피언 드래프트{% endblock %}
+
+{% block extra_css %}
+<style>
+  .team-setup {
+    background-color: #222;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 30px;
+  }
+  
+  .team-name {
+    color: {% if team == 'blue' %}#0088ff{% else %}#ff3333{% endif %};
+    font-weight: bold;
+  }
+  
+  .member-list {
+    margin-top: 20px;
+  }
+  
+  .member-item {
+    background-color: #333;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .add-member-form {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+  }
+  
+  .add-member-form input {
+    flex-grow: 1;
+  }
+  
+  .action-buttons {
+    margin-top: 30px;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>칼바람 팀 설정</h2>
+
+<div class="team-setup">
+  <h3>당신은 <span class="team-name">{% if team == 'blue' %}블루팀{% else %}레드팀{% endif %}</span>입니다.</h3>
+  
+  <div class="member-list" id="member-list">
+    {% if team == 'blue' %}
+      {% for member in room.blue_members %}
+        <div class="member-item">
+          <span>{{ member.name }}</span>
+          <button onclick="removeMember({{ loop.index0 }})">제거</button>
+        </div>
+      {% endfor %}
+    {% else %}
+      {% for member in room.red_members %}
+        <div class="member-item">
+          <span>{{ member.name }}</span>
+          <button onclick="removeMember({{ loop.index0 }})">제거</button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  
+  <div class="add-member-form">
+    <input type="text" id="nickname" placeholder="닉네임 입력">
+    <button onclick="addMember()">추가</button>
+  </div>
+  
+  <div class="action-buttons">
+    <a href="/aram_rooms"><button>돌아가기</button></a>
+    <a href="/aram/{{ room_id }}?team={{ team }}"><button id="start-btn">게임 시작</button></a>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+const socket = io();
+const roomId = "{{ room_id }}";
+const team = "{{ team }}";
+
+// 방 입장
+socket.emit('join', {
+  room: roomId,
+  team: team
+});
+
+// 멤버 추가
+function addMember() {
+  const nickname = document.getElementById('nickname').value.trim();
+  
+  if (nickname) {
+    socket.emit('add_aram_member', {
+      room: roomId,
+      team: team,
+      nickname: nickname
+    });
+    
+    document.getElementById('nickname').value = '';
+  }
+}
+
+// 멤버 제거
+function removeMember(idx) {
+  socket.emit('remove_aram_member', {
+    room: roomId,
+    team: team,
+    index: idx
+  });
+}
+
+// ARAM 업데이트 수신
+socket.on('update_aram', function(data) {
+  const memberList = document.getElementById('member-list');
+  memberList.innerHTML = '';
+  
+  const members = team === 'blue' ? data.blue_members : data.red_members;
+  
+  members.forEach((member, idx) => {
+    const memberItem = document.createElement('div');
+    memberItem.className = 'member-item';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = member.name;
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '제거';
+    removeBtn.onclick = function() { removeMember(idx); };
+    
+    memberItem.appendChild(nameSpan);
+    memberItem.appendChild(removeBtn);
+    
+    memberList.appendChild(memberItem);
+  });
+});
+
+// 오류 메시지 수신
+socket.on('error', function(data) {
+  alert(data.msg);
+});
+</script>
+{% endblock %}

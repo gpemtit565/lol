@@ -1,0 +1,389 @@
+{% extends "layout.html" %}
+
+{% block title %}칼바람 랜덤픽 - LoL 챔피언 드래프트{% endblock %}
+
+{% block extra_css %}
+<style>
+  .aram-container {
+    display: flex;
+    gap: 40px;
+  }
+  
+  .team-column {
+    flex: 1;
+    border: 2px solid;
+    padding: 10px;
+    border-radius: 5px;
+  }
+  
+  .blue-team {
+    border-color: #0088ff;
+  }
+  
+  .red-team {
+    border-color: #ff3333;
+  }
+  
+  .member {
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #333;
+    border-radius: 5px;
+  }
+  
+  .champion-card {
+    display: flex;
+    align-items: center;
+    margin: 10px 0;
+    padding: 10px;
+    background: #444;
+    border-radius: 5px;
+  }
+  
+  .champion-card img {
+    width: 40px;
+    height: 40px;
+    margin-right: 10px;
+  }
+  
+  .button-group {
+    margin-left: auto;
+    display: flex;
+    gap: 5px;
+  }
+  
+  .reroll-pools {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .reroll-pool {
+    flex: 1;
+    padding: 10px;
+    background: #222;
+    border-radius: 5px;
+  }
+  
+  .reroll-pool h3 {
+    margin-top: 0;
+    text-align: center;
+    color: #0088ff;
+  }
+  
+  .reroll-pool.red h3 {
+    color: #ff3333;
+  }
+  
+  .reroll-champions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+  }
+  
+  .reroll-champion {
+    width: 60px;
+    text-align: center;
+    background: #333;
+    padding: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  
+  .reroll-champion img {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .reroll-champion:hover {
+    background: #444;
+  }
+  
+  .disabled-team {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>칼바람 랜덤픽</h2>
+
+<!-- 리롤 풀 (나란히 배치) -->
+<div class="reroll-pools">
+  <div class="reroll-pool blue" id="blue-reroll-pool">
+    <h3>블루팀 리롤 풀</h3>
+    <div class="reroll-champions" id="blue-reroll-champions">
+      {% for champ in room.reroll_pool_blue %}
+      <div class="reroll-champion" onclick="selectFromRerollPool('blue', '{{ champ }}')">
+        <img src="{{ url_for('static', filename='images/' + champion_image_map[champ]) }}" alt="{{ champ }}">
+        <p>{{ champ }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="reroll-pool red" id="red-reroll-pool">
+    <h3>레드팀 리롤 풀</h3>
+    <div class="reroll-champions" id="red-reroll-champions">
+      {% for champ in room.reroll_pool_red %}
+      <div class="reroll-champion" onclick="selectFromRerollPool('red', '{{ champ }}')">
+        <img src="{{ url_for('static', filename='images/' + champion_image_map[champ]) }}" alt="{{ champ }}">
+        <p>{{ champ }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="aram-container">
+  <div class="team-column blue-team {% if team != 'blue' and team != 'spectator' %}disabled-team{% endif %}" id="blue-team">
+    <h3>블루팀</h3>
+    {% for member in room.blue_members %}
+    <div class="member" data-team="blue" data-index="{{ loop.index0 }}">
+      <div class="champion-card">
+        {% if member.champion %}
+        <img src="{{ url_for('static', filename='images/' + champion_image_map[member.champion]) }}" alt="{{ member.champion }}">
+        <span>{{ member.name }} - {{ member.champion }}</span>
+        <div class="button-group">
+          <button onclick="rollChampion('blue', {{ loop.index0 }})" {% if member.reroll_count <= 0 %}disabled{% endif %}>
+            🎲 ({{ member.reroll_count }}회 남음)
+          </button>
+          <button onclick="openSwapDialog('blue', {{ loop.index0 }})">스왑</button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  
+  <div class="team-column red-team {% if team != 'red' and team != 'spectator' %}disabled-team{% endif %}" id="red-team">
+    <h3>레드팀</h3>
+    {% for member in room.red_members %}
+    <div class="member" data-team="red" data-index="{{ loop.index0 }}">
+      <div class="champion-card">
+        {% if member.champion %}
+        <img src="{{ url_for('static', filename='images/' + champion_image_map[member.champion]) }}" alt="{{ member.champion }}">
+        <span>{{ member.name }} - {{ member.champion }}</span>
+        <div class="button-group">
+          <button onclick="rollChampion('red', {{ loop.index0 }})" {% if member.reroll_count <= 0 %}disabled{% endif %}>
+            🎲 ({{ member.reroll_count }}회 남음)
+          </button>
+          <button onclick="openSwapDialog('red', {{ loop.index0 }})">스왑</button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<audio id="bgm" loop>
+  <source src="{{ url_for('static', filename='bgm/draft-bgm.mp3') }}" type="audio/mpeg">
+</audio>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+const socket = io();
+const roomId = "{{ room_id }}";
+const myTeam = "{{ team }}";
+const championImageMap = {{ champion_image_map|tojson }};
+
+// 브금 자동 재생
+document.addEventListener('click', () => {
+  const bgm = document.getElementById('bgm');
+  if(bgm.paused) bgm.play();
+}, {once:true});
+
+// 방 입장
+socket.emit('join', {
+  room: roomId,
+  team: myTeam
+});
+
+// 챔피언 리롤
+function rollChampion(team, idx) {
+  if (team !== myTeam && myTeam !== 'spectator') {
+    alert('해당 팀의 권한이 없습니다.');
+    return;
+  }
+  
+  socket.emit('roll_champion', {room: roomId, team: team, index: idx});
+}
+
+// 리롤 풀에서 챔피언 선택
+function selectFromRerollPool(team, champion) {
+  if (team !== myTeam && myTeam !== 'spectator') {
+    alert('해당 팀의 권한이 없습니다.');
+    return;
+  }
+  
+  // 팀 멤버 선택 모달 표시
+  const members = team === 'blue' ? document.querySelectorAll('.blue-team .member') : document.querySelectorAll('.red-team .member');
+  let memberList = '';
+  
+  members.forEach((member, idx) => {
+    const name = member.querySelector('.champion-card span').textContent.split(' - ')[0];
+    memberList += `<div onclick="confirmRerollPoolSelection('${team}', ${idx}, '${champion}')" style="padding: 10px; margin: 5px; background: #333; cursor: pointer;">${name}</div>`;
+  });
+  
+  // 모달 생성 및 표시
+  const modal = document.createElement('div');
+  modal.id = 'member-select-modal';
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; justify-content: center; align-items: center;';
+  
+  modal.innerHTML = `
+    <div style="background: #222; padding: 20px; border-radius: 10px; max-width: 400px;">
+      <h3>챔피언을 받을 멤버 선택</h3>
+      <div>${memberList}</div>
+      <button onclick="document.getElementById('member-select-modal').remove()" style="margin-top: 10px;">취소</button>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+// 리롤 풀 선택 확인
+function confirmRerollPoolSelection(team, idx, champion) {
+  document.getElementById('member-select-modal').remove();
+  
+  socket.emit('select_from_reroll_pool', {
+    room: roomId,
+    team: team,
+    index: idx,
+    champion: champion
+  });
+}
+
+// 스왑 다이얼로그 열기
+function openSwapDialog(sourceTeam, sourceIdx) {
+  if (sourceTeam !== myTeam && myTeam !== 'spectator') {
+    alert('해당 팀의 권한이 없습니다.');
+    return;
+  }
+  
+  // 스왑 대상 선택 모달 표시
+  const modal = document.createElement('div');
+  modal.id = 'swap-modal';
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; justify-content: center; align-items: center;';
+  
+  // 블루팀 멤버 목록
+  let blueMembers = '';
+  document.querySelectorAll('.blue-team .member').forEach((member, idx) => {
+    if (sourceTeam === 'blue' && sourceIdx === idx) return; // 자기 자신 제외
+    const name = member.querySelector('.champion-card span').textContent.split(' - ')[0];
+    blueMembers += `<div onclick="confirmSwap('${sourceTeam}', ${sourceIdx}, 'blue', ${idx})" style="padding: 10px; margin: 5px; background: #333; cursor: pointer;">${name}</div>`;
+  });
+  
+  // 레드팀 멤버 목록
+  let redMembers = '';
+  document.querySelectorAll('.red-team .member').forEach((member, idx) => {
+    if (sourceTeam === 'red' && sourceIdx === idx) return; // 자기 자신 제외
+    const name = member.querySelector('.champion-card span').textContent.split(' - ')[0];
+    redMembers += `<div onclick="confirmSwap('${sourceTeam}', ${sourceIdx}, 'red', ${idx})" style="padding: 10px; margin: 5px; background: #333; cursor: pointer;">${name}</div>`;
+  });
+  
+  modal.innerHTML = `
+    <div style="background: #222; padding: 20px; border-radius: 10px; max-width: 600px; width: 80%;">
+      <h3>스왑할 대상 선택</h3>
+      <div style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+          <h4 style="color: #0088ff;">블루팀</h4>
+          ${blueMembers}
+        </div>
+        <div style="flex: 1;">
+          <h4 style="color: #ff3333;">레드팀</h4>
+          ${redMembers}
+        </div>
+      </div>
+      <button onclick="document.getElementById('swap-modal').remove()" style="margin-top: 10px;">취소</button>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+}
+
+// 스왑 확인
+function confirmSwap(sourceTeam, sourceIdx, targetTeam, targetIdx) {
+  document.getElementById('swap-modal').remove();
+  
+  socket.emit('swap_champions', {
+    room: roomId,
+    source_team: sourceTeam,
+    source_idx: sourceIdx,
+    target_team: targetTeam,
+    target_idx: targetIdx
+  });
+}
+
+// ARAM 업데이트 수신
+socket.on('update_aram', function(data) {
+  // 블루팀 리롤 풀 업데이트
+  updateRerollPool('blue', data.reroll_pool_blue);
+  
+  // 레드팀 리롤 풀 업데이트
+  updateRerollPool('red', data.reroll_pool_red);
+  
+  // 블루팀 멤버 업데이트
+  updateTeamMembers('blue', data.blue_members);
+  
+  // 레드팀 멤버 업데이트
+  updateTeamMembers('red', data.red_members);
+});
+
+// 리롤 풀 업데이트 함수
+function updateRerollPool(team, champions) {
+  const poolContainer = document.getElementById(`${team}-reroll-champions`);
+  poolContainer.innerHTML = '';
+  
+  champions.forEach(champ => {
+    const champDiv = document.createElement('div');
+    champDiv.className = 'reroll-champion';
+    champDiv.onclick = function() { selectFromRerollPool(team, champ); };
+    
+    const img = document.createElement('img');
+    img.src = `/static/images/${championImageMap[champ]}`;
+    img.alt = champ;
+    
+    const p = document.createElement('p');
+    p.textContent = champ;
+    
+    champDiv.appendChild(img);
+    champDiv.appendChild(p);
+    poolContainer.appendChild(champDiv);
+  });
+}
+
+// 팀 멤버 업데이트 함수
+function updateTeamMembers(team, members) {
+  const memberElements = document.querySelectorAll(`.${team}-team .member`);
+  
+  members.forEach((member, idx) => {
+    if (idx >= memberElements.length) return;
+    
+    const memberEl = memberElements[idx];
+    const championCard = memberEl.querySelector('.champion-card');
+    
+    // 챔피언 카드 업데이트
+    if (member.champion) {
+      championCard.innerHTML = `
+        <img src="/static/images/${championImageMap[member.champion]}" alt="${member.champion}">
+        <span>${member.name} - ${member.champion}</span>
+        <div class="button-group">
+          <button onclick="rollChampion('${team}', ${idx})" ${member.reroll_count <= 0 ? 'disabled' : ''}>
+            🎲 (${member.reroll_count}회 남음)
+          </button>
+          <button onclick="openSwapDialog('${team}', ${idx})">스왑</button>
+        </div>
+      `;
+    }
+  });
+}
+
+// 오류 메시지 수신
+socket.on('error', function(data) {
+  alert(data.msg);
+});
+</script>
+{% endblock %}
