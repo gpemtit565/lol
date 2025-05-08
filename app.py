@@ -178,7 +178,7 @@ def _server_pick(room_id, team, champion):
     }, room=room_id)
     # 타이머 재시작(다음 픽이 남아있으면)
     if state['pick_phase'] < len(pick_order):
-        socketio.emit('restart_timer', {'duration': 30}, room=room_id)
+        socketio.emit('restart_timer', {'duration': 40}, room=room_id)
         start_pick_timer(room_id)
 
 if __name__ == '__main__':
